@@ -1,6 +1,6 @@
 参考资料： 
 
-<https://juejin.im/entry/5993eeaa51882524382f3c0b>
+<https://juejin.im/entry/58be60de570c350059b65399>
 
 实在是有太多种方式实现继承了，那么一般框架的源码都是采用哪种继承方式呢？为什么采用这种继承方式呢？ 
 
@@ -8,27 +8,29 @@
 
 一、纯粹的原型继承 
 
-`function Parent () {`
+```
+function Parent () {
 
   this.common = 0
 
-`}`
+}
 
-`function Child() {`
+function Child() {
 
   this.y = 1
 
-`}`
+}
 
-`Parent.prototype.fn = function(){}`
+Parent.prototype.fn = function(){}
 
-`Child.prototype = new Parent()`
+Child.prototype = new Parent()
 
-`Child.prototype.constructor = Child`
+Child.prototype.constructor = Child
 
-`var son = new Child()`
+var son = new Child()
 
-`console.log('儿子', son);`
+console.log('儿子', son);
+```
 
 ![first](assets/first.jpg)
 
@@ -36,29 +38,31 @@
 
 二、call和Object.create结合的
 
-`function Parent () {`
+```
+function Parent () {
 
   this.common = 0
 
-`}`
+}
 
-`function Child() {`
+function Child() {
 
   this.y = 1
 
   Parent.call(this)
 
-`}`
+}
 
-`Parent.prototype.fn = function(){}`
+Parent.prototype.fn = function(){}
 
-`Child.prototype = Object.create(Parent.prototype)`
+Child.prototype = Object.create(Parent.prototype)
 
-`Child.prototype.constructor = Child`
+Child.prototype.constructor = Child
 
-`var son = new Child()`
+var son = new Child()
 
-`console.log('儿子', son);`
+console.log('儿子', son);
+```
 
 ![second](assets/second.jpg)
 
