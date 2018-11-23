@@ -226,7 +226,7 @@ function initApp() {
 initApp()
 ```
 
-到此，一个采用MVC架构的web应用就完成了。
+到此，一个采用MVC架构的web应用就完成了，可以看到
 
 ### bshdhwi
 
