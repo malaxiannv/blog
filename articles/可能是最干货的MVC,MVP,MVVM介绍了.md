@@ -199,7 +199,7 @@ function Model() {
   }
   this.decrease = function () {
     this.count = this.count - 1
-    this.notify
+    this.notify()
   }
   this.getVal = function () {
     return this.count
@@ -226,7 +226,120 @@ function initApp() {
 initApp()
 ```
 
-到此，一个采用MVC架构的web应用就完成了，可以看到
+到此，一个采用MVC架构的web应用就完成了，可以看到业务逻辑层和视图层拆分开了，但是一个视图层绑定了一个控制层，如果我想要复用controller的话，该怎么办呢？要解决这个问题，就引入了MVP设计模式。
+
+## 二、MVP
+
+mvp是mvc的改良版，它把view和model隔离开了，先上原理图：
+
+![image-20181124121814708](assets/image-20181124121814708-3033094.png)
+
+用户点击页面上的按钮，触发绑定在view上的点击事件，调用presenter的业务逻辑，presenter收到调用通知后，去调用model层处理数据，然后再调用view层更新视图，我们把上面的例子简化，专注于各层之间的调用关系。
+
+View
+
+```
+function View() {
+  this.presenter = null
+  this.template = compile($("#view1").html())
+  this.$el = $("<div class='view'></div>")
+}
+
+View.prototype.build = function() {
+  this.render()
+  this.listen()
+}
+
+View.prototype.render = function() {
+  this.$el.html(this.template())
+}
+
+View.prototype.setPresenter = function(presenter) {
+  this.presenter = presenter
+}
+
+View.prototype.listen = function() {
+  var self = this
+  this.$el
+    .find("view.increase-btn")
+    .on("click", function() {
+      var num = $('view.count').val()
+      //看到这里你可能会有疑问，在初始化View构造函数的时候，并没有传入presenter对象，又如何调用presenter的onAddCount方法呢？可以耐心看到下面，其实在初始化Presenter的时候，调用了view对象的setPresenter方法，从而把presenter对象的属性和方法绑定到view对象的私有属性presenter上。因此可以看出在MVP模式中，view模块是相对独立的，好处是view模块可以复用，对view的操作和对model的调用全部放在了presenter层，当业务庞大的时候，这一层会很fat，这也是为什么后面又引入了MVVM模式。
+      self.presenter.onAddCount() 
+    })
+}
+
+View.prototype.getVal = function() {
+  return this.$el.find("num").val()
+}
+
+View.prototype.setVal = function(content) {
+  return this.$el.find("num").val(content)
+}
+
+module.exports = View
+```
+
+Presenter
+
+```
+function Presenter(view, model) {
+  this.view = view
+  this.model = model
+  this.init()
+}
+
+Presenter.prototype.init = function() {
+  this.view.setPresenter(this)
+  this.view.build()
+}
+
+Presenter.prototype.onAddCount = function() {
+  var count = this.view.getVal()
+  if (count > 10) return
+  //presenter调用model处理逻辑，然后把新数据传递给view，重新渲染视图
+  this.model.increase(count)
+  this.view.setVal(this.model.getValue())
+}
+
+module.exports = Presenter
+```
+
+Model
+
+```
+function Model() {
+  this.count = 5
+
+  this.increase = function (num) {
+    this.count = this.count + num
+  }
+
+  this.getValue = function () {
+    return this.count
+  }
+}
+
+module.exports = Model
+```
+
+初始化应用
+
+```
+function initApp() {
+  var view = new View
+  var model = new Model
+  var presenter = new Presenter(view, model)
+}
+
+initApp()
+```
+
+从初始化的代码也可看出，model和view互相没有直接联系，这使得他们可以作为独立模块来复用。其中Presenter起到一个中枢神经的作用，业务逻辑主要放在了这一层，因此这一层也会比较臃肿。
+
+## 三、MVVM
+
+
 
 ### bshdhwi
 
