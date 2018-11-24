@@ -400,8 +400,6 @@ new ViewModel({
 
 若有不同的理解，欢迎提issue。
 
-### bshdhwi
-
 参考资料：
 
 https://juejin.im/post/593021272f301e0058273468
