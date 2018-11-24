@@ -226,7 +226,7 @@ function initApp() {
 initApp()
 ```
 
-到此，一个采用MVC架构的web应用就完成了，可以看到业务逻辑层和视图层拆分开了，但是一个视图层绑定了一个控制层，如果我想要复用controller的话，该怎么办呢？要解决这个问题，就引入了MVP设计模式。
+到此，一个采用MVC架构的web应用就完成了，可以看到业务逻辑层和视图层拆分开了，但是一个视图层绑定了一个控制层，如果我想要复用view的话，该怎么办呢？要解决这个问题，就引入了MVP设计模式。
 
 ## 二、MVP
 
@@ -339,11 +339,68 @@ initApp()
 
 ## 三、MVVM
 
+MVVM是目前前端领域最流行的模式，最著名的Vue就是MVVM架构的。
 
+![image-20181124132435346](assets/image-20181124132435346-3037075.png)
+
+Model层可以被称为数据层，因为model不关心业务逻辑，只关注数据本身，也可以把model理解成一个类似于json的数据对象
+
+Model
+
+```
+var data = {
+    num: 5
+}
+```
+
+View层是通过模板语法，声明式的把数据渲染到视图中
+
+```
+<div id="myapp">
+    <div>
+        <span>{{ num }}</span>
+    </div>
+    <div>
+        <button v-on:click="increase(1)">+</button>
+        <button v-on:click="decrease(1)">-</button>
+    </div>
+</div>
+```
+
+ViewModel类比于MVP中的Presenter，与之不同的是，在ViewModel中不需要开发者在开发的时候显示的调用view对象的渲染接口。采用MVVM架构的框架会在初始化ViewModel的时候，应用数据劫持+发布-订阅模式实现数据和视图的响应式变化（这部分详见Vue的框架原理）。也就是model中的数据改变了，会触发view的更新渲染。view层的数据变化，也会引起model中数据的变化。
+
+```
+new ViewModel({
+    el: '#myapp',
+    data: data,
+    methods: {
+        increase(v) {
+            if(this.val < 10) {
+                this.val += v;
+            }
+        },
+        decrease(v) {
+            if(this.val > 0) {
+                this.val -= v;
+            }
+        }
+    }
+});
+```
+
+可以看到实现了MVVM架构的框架帮我们封装了需要手动调用的逻辑，使各个模块的开发更独立，简化了开发流程，工程师可以用更短的时间开发出更好维护的项目，人类真是为了可以心安理得的懒惰，而无所不用其极，也应了那句名言：
+
+```
+懒惰才是第一生产力        ___伊丽莎白.老仙女
+```
+
+## 总结
+
+三种很抽象的设计模式，用代码实现一遍就很好理解了，工程师的世界，知行合一才是进步的最短路径。
+
+若有不同的理解，欢迎提issue。
 
 ### bshdhwi
-
-
 
 参考资料：
 
