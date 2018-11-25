@@ -76,4 +76,28 @@
    }
    ```
 
-4. 
+4. 为什么要在data对象上定义一个`_ob_`属性？只是为了防止data对象被重复监测吗？
+
+   ```
+   export function observe (value: any, asRootData: ?boolean): Observer | void {
+     if (!isObject(value) || value instanceof VNode) {
+       return
+     }
+     let ob: Observer | void
+     if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
+       ob = value.__ob__
+     } else if (
+       shouldObserve &&
+       !isServerRendering() &&
+       (Array.isArray(value) || isPlainObject(value)) &&
+       Object.isExtensible(value) &&
+       !value._isVue
+     ) {
+       ob = new Observer(value)
+     }
+     if (asRootData && ob) {
+       ob.vmCount++
+     }
+     return ob
+   }
+   ```

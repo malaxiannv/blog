@@ -2,7 +2,7 @@
 
 ```
 <template>
-		<div>{{name}}</div>
+	<div>{{name}}</div>
 </template>
 		
 new Vue({
@@ -249,21 +249,21 @@ $watch(render, fn)
 
 ```
 function $watch (expOrFn, fn) {
-  Target = fn
-  if (typeof expOrFn === 'function') {
-    expOrFn()
-    return
-  }
-  if (/\./.test(key)) {
-    const arr = key.split('.')
-    let obj = data
-    arr.forEach(item => {
-    	obj = obj[item]
-    })
-  } else {
-  	data[key]
-  }
-}
+			Target = fn
+			if (typeof expOrFn === 'function') {
+				expOrFn()
+				return
+			}
+			if (/\./.test(expOrFn)) {
+				const arr = expOrFn.split('.')
+				let obj = data
+				arr.forEach(item => {
+					obj = obj[item]
+				})
+			} else {
+				data[expOrFn]
+			}
+    }
 ```
 
 再次调用改进后的`$watch函数`，执行`$watch(render, render)`，为什么第二个参数传递的还是render呢？因为第一个参数用来收集依赖，当属性值改变后，就执行render函数重新渲染视图，这也是Vue响应式系统的实现思路。
