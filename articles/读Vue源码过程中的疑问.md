@@ -49,32 +49,93 @@
    }
    ```
 
-3. 在defineReactive函数中，对getter和setter的判断不理解
+3. 在defineReactive函数中，对`if ((!getter || setter) && arguments.length === 2) `语句不理解
 
    ```
    export function defineReactive (
      obj: Object,
      key: string,
      val: any,
-     customSetter?: ?Function,
-     shallow?: boolean
    ) {
-     const dep = new Dep()
-   
+     ...
      const property = Object.getOwnPropertyDescriptor(obj, key)
-     if (property && property.configurable === false) {
-       return
-     }
-   
-     // cater for pre-defined getter/setters
      const getter = property && property.get
      const setter = property && property.set
      if ((!getter || setter) && arguments.length === 2) {
        val = obj[key]
      }
+     let childOb = !shallow && observe(val)
      ...
    }
    ```
+
+   这个要从Vue的更新历史说起，最开始的定义是这样的：
+
+   ```
+   walk (obj: Object) {
+     const keys = Object.keys(obj)
+     for (let i = 0; i < keys.length; i++) {
+       // 这里传递了第三个参数
+       defineReactive(obj, keys[i], obj[keys[i]])
+     }
+   }
+   ```
+
+   后来有个歪果仁给尤大提issue，他的use case是这样的：
+
+   ```
+   //要在获取data中的某个属性时执行一些操作，但是不希望data初始化的时候就触发getter中的要执行的逻辑
+     const dataProp = {}
+     Object.defineProperty(dataProp, 'getterProp', {
+       enumerable: true,
+       get: function () {
+         console.log('这个不应该在一开始就打印出来');
+         return 'some value'
+       }
+     })
+   
+     new Vue({
+       el: '#app',
+       data: dataProp
+     })
+   ```
+
+   如果按照最初的定义，在`walk`函数中调用`defineReactive(obj, keys[i], obj[keys[i]])`时，`obj[keys[i]`就会触发`getterProp`的get函数，因此为了解决这类use case，Vue做了改进：
+
+   ```
+   walk (obj: Object) {
+     const keys = Object.keys(obj)
+     for (let i = 0; i < keys.length; i++) {
+       // 在 walk 函数中调用 defineReactive 函数时暂时不获取属性值
+       defineReactive(obj, keys[i])
+     }
+   }
+   
+   // ================= 分割线 =================
+   
+   // 在 defineReactive 函数内获取属性值
+   if (!getter && arguments.length === 2) {
+     val = obj[key]
+   }
+   ```
+
+   判断要监测的属性值，有自定义的get函数的话，就不执行`val = obj[key]`了，改成这样就完事大吉了吗？还没有，
+
+   后面又有一个歪果仁提出异议，如果既有getter，又有setter时，还是希望可以像之前一样正常获取val值，而且因为上一个歪果仁的case中没有定义setter，所以这个改进不影响他，因此就改成了目前这种状态：
+
+   ```
+   const getter = property && property.get
+     const setter = property && property.set
+     if ((!getter || setter) && arguments.length === 2) {
+       val = obj[key]
+     }
+   ```
+
+   参考issues：
+
+   https://github.com/vuejs/vue/issues/7280#ref-commit-7d6bb83
+
+   https://github.com/vuejs/vue/pull/7828
 
 4. 为什么要在data对象上定义一个`_ob_`属性？
 
