@@ -76,28 +76,105 @@
    }
    ```
 
-4. 为什么要在data对象上定义一个`_ob_`属性？只是为了防止data对象被重复监测吗？
+4. 为什么要在data对象上定义一个`_ob_`属性？
 
    ```
    export function observe (value: any, asRootData: ?boolean): Observer | void {
-     if (!isObject(value) || value instanceof VNode) {
-       return
-     }
-     let ob: Observer | void
-     if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
-       ob = value.__ob__
-     } else if (
-       shouldObserve &&
-       !isServerRendering() &&
-       (Array.isArray(value) || isPlainObject(value)) &&
-       Object.isExtensible(value) &&
-       !value._isVue
-     ) {
-       ob = new Observer(value)
-     }
-     if (asRootData && ob) {
-       ob.vmCount++
-     }
+     ...
+     ob = new Observer(value)
+     ...
      return ob
    }
    ```
+
+   这个属性的主要作用是用来收集依赖的，以便开发者使用Vue.set增加属性的时候，也能触发依赖的更新，我们来详细看一下是如何实现的？这个问题也可以变相为Vue.set的更新原理是什么呢？或者Vue.set是如何实现响应式数据更新的呢？
+
+   上面的`observe`函数执行结果是返回一个`ob对象`，找到这个对象的生成语句`ob = new Observer(value)`，接着看Observer构造函数是如何定义的：
+
+   ```
+   export class Observer {
+     value: any;
+     dep: Dep;
+     vmCount: number; // number of vms that has this object as root $data
+   
+     constructor (value: any) {
+       this.value = value
+       this.dep = new Dep()
+       this.vmCount = 0
+       def(value, '__ob__', this)
+       ...
+       this.walk(value)
+     }
+   
+     walk (obj: Object) {
+       const keys = Object.keys(obj)
+       for (let i = 0; i < keys.length; i++) {
+         defineReactive(obj, keys[i])
+       }
+     }
+   	...
+   }
+   ```
+
+   可见ob是由Observer构造函数创建出来的一个实例对象，这个对象有三个私有属性value、dep和vmCount，其中dep就是用来收集依赖的筐，假设我们有如下这样的一个`data`对象，经过observe函数的处理，这个对象会变成什么呢？
+
+   ```
+   data: {
+     a: {
+       b: 1
+     }
+   }
+   ```
+
+   变成这样：
+
+   ```
+   data: {
+     a: {
+       b: 1,
+       _ob_: {value: a, dep, vmcount}
+     },
+     _ob_: {value: data, dep, vmCount}
+   }
+   ```
+
+   我们看Observe构造函数的执行逻辑，核心在于defineReactive函数，简化版如下：
+
+   ```
+   export function defineReactive (
+     obj: Object,
+     key: string,
+     val: any,
+   ) {
+     const dep = new Dep()
+     let childOb = observe(val)
+     Object.defineProperty(obj, key, {
+       get: function reactiveGetter () {
+         if (Dep.target) {
+           dep.depend()
+           if (childOb) {
+             childOb.dep.depend()
+           }
+         }
+         return value
+       },
+       ...
+   }
+   ```
+
+   你可能会奇怪get函数中为什么会有`if (childOb)`的逻辑？我们访问data.a触发这个get函数的时候，把Dep.target收集到了dep这个筐子里，为什么还要收集到`childOb.dep`筐子里呢？childOb是什么呢？以上面的data对象为例，childOb就是一个ob对象{value, dep, vmCount}，也是`data.a._ob_`，把依赖收集到`data.a._ob_.dep`的筐子里，可以在Vue.set(data.a, c, 2)的时候通知订阅了data.a订阅器，告诉他们我更新啦，我们想象一下Vue.set的实现：
+
+   ```
+   Vue.set = function (obj, key, value) {
+     defineReactive(obj, key, value)
+     obj._ob_.dep.notify()
+   }
+   ```
+
+   呀，没想到纠结一个_`ob`_对象的作用，居然了解了Vue.set或者Vue.delete的实现原理，总结一下：
+
+   在检测data对象的时候，会给data对象的每一个属性值内部再定义一个`_`ob`_`属性，这个属性的值就是一个Observer对象，其中有个私有属性dep用来收集和当前属性相同的依赖。相当于是访问data.a的时候准备了两个筐子收集相同的依赖，以便之后通过Vue.set(data.a, key, value)的方式改变data.a的值时，也能通知这些依赖更新。
+
+5. 终于理解了watch函数中的获取完数据属性后，Target要置为null，因为防止获取data.a的时候把依赖重复添加进去。
+
+6. 
