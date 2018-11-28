@@ -268,6 +268,33 @@ function $watch (expOrFn, fn) {
 
 再次调用改进后的`$watch函数`，执行`$watch(render, render)`，为什么第二个参数传递的还是render呢？因为第一个参数用来收集依赖，当属性值改变后，就执行render函数重新渲染视图，这也是Vue响应式系统的实现思路。
 
+我们进一步思考，上面的data对象中如果属性值是数组的话，会和对象是一样的处理方法吗？也是用set和get吗？显然是不行的。
+
+```
+const data = {
+  lists: [1, 2, 3] 
+}
+```
+
+数组实例自带很多原型方法会改变数组本身的值，比如：`push`、`pop`、`shift`、`unshift`、`splice`、`sort` 以及 `reverse` 等。那开发者很可能会使用到这些方法，我们就需要监听这些方法，在触发的时候更新依赖，那么如何触发呢？思考一下，比如有个数组实例`a = [1, 2, 3]`，`a.__proto__ == Array.prototype`，`Array.prototype`这个对象中包含的都是数组的方法，因此我们可以这样实现：
+
+```
+var arrMethodsObj = Object.create(Array.prototype) 
+a.__proto__ = arrMethodsObj
+```
+
+因此我们可以在a的`__proto__`指向的对象`arrMethodsObj`中重写`push、pop`等方法，而这个`arrMethodsObj`对象的`__proto__`指向的又是数组的原型对象，以push为例看`arrMethodsObj`如何实现。
+
+```
+arrMethodsObj.push = function () {
+      const ret = Array.prototype.push.call(this, arguments)
+      dep.notify()
+      return ret
+    }
+```
+
+可以封装一个方法来处理这几个数组方法。
+
 不过真实的响应系统，还有很多细节需要处理，比如第二个render函数的执行又会触发一次依赖的收集，如何避免重复收集依赖呢？
 
 持续更新中...
