@@ -295,7 +295,186 @@ arrMethodsObj.push = function () {
 
 可以封装一个方法来处理这几个数组方法。
 
-不过真实的响应系统，还有很多细节需要处理，比如第二个render函数的执行又会触发一次依赖的收集，如何避免重复收集依赖呢？
+不过真实的响应系统，还有很多细节需要处理，我们思考一下，如果上面的render函数是这样写的
+
+```
+function render () {
+	return document.write(`姓名：${data.name}，昵称：${data.name}，年龄：${data.age}`)
+}
+```
+
+有两个data.name，会触发两次get拦截器属性，会在这一个渲染器watcher中重复收集两次data.name的依赖，那么我们思考一下如何避免在一次计算中重复收集依赖呢？
+
+watcher和dep的关系大概如此：
+
+1.在初始化的时候，会创建一个渲染函数watcher，除了这个watcher，还会有计算属性watcher等其他的watcher。
+
+2.每个wacther中可能会触发多个data对象属性的get函数，比如上面的render watcher中有data.name和data.age，这两个data属性的get拦截器函数都被触发了，每个watcher中会有deps属性用来存放所有的收集筐。
+
+3.每个data属性的get拦截器函数都会创建一个自己的dep实例对象，用于收集watcher，比如1号筐子dep1是data.name的筐子，渲染函数watcher中用到了data.name，计算属性watcher中用到了this.name，都触发了name的get函数，那么dep1中就收集了两个watcher。
+
+我们以渲染函数watcher为例，来说明是如何收集依赖，以及如何避免收集重复依赖的。看简易版的Watcher这个构造函数：
+
+```
+ export default class Watcher {
+      constructor (
+        vm: Component,
+        expOrFn: string | Function,
+        cb: Function,
+      ) {
+        this.deps = []
+        this.newDeps = []
+        this.depIds = new Set()
+        this.newDepIds = new Set()
+        this.value = this.get()
+      }
+
+      get () {
+        pushTarget(this)
+        let value
+        const vm = this.vm
+        value = this.getter.call(vm, vm) //这一行代码就是用来求值，触发各个属性的get拦截器函数
+        popTarget()
+        this.cleanupDeps() 
+        return value
+      }
+
+      addDep (dep: Dep) {
+        const id = dep.id
+        if (!this.newDepIds.has(id)) {
+          this.newDepIds.add(id)
+          this.newDeps.push(dep)
+          if (!this.depIds.has(id)) {
+            dep.addSub(this)
+          }
+        }
+      }
+
+      cleanupDeps () {
+        let i = this.deps.length
+        while (i--) {
+          const dep = this.deps[i]
+          if (!this.newDepIds.has(dep.id)) {
+            dep.removeSub(this)
+          }
+        } 
+        let tmp = this.depIds
+        this.depIds = this.newDepIds
+        this.newDepIds = tmp 
+        this.newDepIds.clear()
+        tmp = this.deps
+        this.deps = this.newDeps
+        this.newDeps = tmp 
+        this.newDeps.length = 0
+      }
+    }
+```
+
+我们来捋一下逻辑执行顺序：
+
+1.初始化watcher，会调用传给watcher的render函数，触发属性的get拦截器
+
+2.get拦截器函数中有一句：`dep.depend()`用来收集watcher依赖
+
+3.`dep`实例的`depend()`函数是这样写的：`Dep.target.addDep(this)`，其中`Dep.target`就是当前的渲染函数`watcher`，回到Watcher构造函数中看addDep如何定义的，addDep才是避免依赖收集的关键。
+
+```
+addDep (dep: Dep) {
+        const id = dep.id
+        if (!this.newDepIds.has(id)) {
+          this.newDepIds.add(id)
+          this.newDeps.push(dep)
+           dep.addSub(this)
+        }
+      }
+```
+
+如果newDepIds中没有这个筐子id才会进一步执行，比如执行第一个data.name的get函数中，一步步执行到这里的时候，最开始this.newDepIds是空，this.newDeps也是空数组，因此会把data.name对应的dep1放入this.newDeps中，把这个dep的编号1添加进`this.newDepIds`中，执行`dep.addSub`，把这个渲染watcher放入dep1的subs数组中。
+
+当执行到第二个`data.name`时，`this.newDepIds`已经有编号1了，因此就不会重复收集渲染`watcher`了。
+
+由上可以看出Vue中避免收集重复依赖是在`Watcher`构造函数的`addDep`方法中实现的。
+
+我们进一步思考：当初始化完毕，后面数据变化了重新求值的时候，如何避免收集重复的依赖，比如render函数变成如下所示：
+
+```
+function render () {
+	return document.write(`年龄：${data.age}`)
+}
+```
+
+那么`renderWatcher`对象就需要重新调用get函数，注意，每一次调用get函数的时候，都会执行`this.cleanupDeps() `，`this.cleanupDeps() `的定义如下：
+
+```
+cleanupDeps () {
+        ...
+        let tmp = this.depIds
+        this.depIds = this.newDepIds
+        this.newDepIds = tmp 
+        this.newDepIds.clear()
+        tmp = this.deps
+        this.deps = this.newDeps
+        this.newDeps = tmp 
+        this.newDeps.length = 0
+      }
+```
+
+就是把当前的`newDepIds、newDeps`清空，并在清空之前把值赋给`depIds、deps`，也就是说`depIds、deps`总是记录着上一次的依赖数据，我们重新执行get函数会重新触发依赖的收集，再回过头来看addDep函数，其实上面的定义少了一行代码：
+
+```
+addDep (dep: Dep) {
+    const id = dep.id
+    if (!this.newDepIds.has(id)) {
+      this.newDepIds.add(id)
+      this.newDeps.push(dep)
+      if (!this.depIds.has(id)) { //少了这个条件判断
+        dep.addSub(this)
+      }
+    }
+  }
+```
+
+再一次求值的时候，会判断这个dep编号上一次是不是已经收集过了，如果已经收集过了，也就是`this.depIds.has(id)`为true，就不继续往下执行了，也就是不再收集这个dep了，这就避免了重复计算时的依赖重复收集了。
+
+到现在为止，还不够完美，我们继续思考，因为上面的render函数变成了如下所示：
+
+```
+function render () {
+	return document.write(`年龄：${data.age}`)
+}
+```
+
+已经没有`data.name`了，也就是说`data.name`属性的dep1筐子中不应该再有`renderWatcher`这个订阅器了，那么这个是在哪一步中实现的呢？这个清除watcher的逻辑是可以放在cleanupDeps中实现的，我们看完整的cleanupDeps如下：
+
+```
+cleanupDeps () {
+        let i = this.deps.length
+        while (i--) { //这是用来移除watcher的
+          const dep = this.deps[i]
+          if (!this.newDepIds.has(dep.id)) {
+            dep.removeSub(this)
+          }
+        } 
+        let tmp = this.depIds
+        this.depIds = this.newDepIds
+        this.newDepIds = tmp 
+        this.newDepIds.clear()
+        tmp = this.deps
+        this.deps = this.newDeps
+        this.newDeps = tmp 
+        this.newDeps.length = 0
+      }
+```
+
+遍历deps数组，也就是查看每一个依赖筐子，比如最初的render函数造就的筐子数组中放着`[dep1，dep2]`，其中dep1对应着`data.name`的依赖，dep2对应着`data.age`的依赖，后来render改变了，在新的筐子中不再有dep1了，也就是说`this.newDepIds.has(1)`是false了，那么就会继续执行`dep.removeSub(this)`，也就是把dep1筐子中的renderwatcher拿掉。这就完美了，可以看到Watcher构造函数中承载着很多逻辑，包括：
+
+1.在一次求值中，避免重复收集依赖，例子：render中有两个`data.name`。
+
+2.在每一次求值结束时，保留本次的依赖数据，同时如果本个watcher实例和某个dep没关系了，那就从dep筐子中拿到本watcher。
+
+3.在重复求值中，避免重复收集依赖。
+
+
 
 持续更新中...
 
