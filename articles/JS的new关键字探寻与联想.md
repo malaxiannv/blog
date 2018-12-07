@@ -121,11 +121,46 @@ obj.__proto__ = Constructor.prototype
 还有一些补充：
 进一步深入思考，如果不用new关键字调用构造函数呢？比如有一个构造函数Foo，直接写成Foo()，这种情况就是普通的函数调用，此时构造函数内部的this指向的就是全局对象，所以这种调用方式和加入new关键字的调用方式是不同的。
 
-![](assets/2.png)
+## 不使用new呢？
+
+如果不使用new关键字，那就是函数调用，本质上就是执行内存中window对象上的代码。
+
+而函数定义这个操作，本身就是给window这个JSON对象添加成员。
+
+比如：
+
+```
+//以下函数定义的实现是window.Foo = function(){}
+var Foo = function() {
+  this.a = 1
+  this.b = 2
+}
+Foo() //将会给window对象添加两个属性A和B，因为此时this指向的是window对象
+```
 
 进一步思考：
 
-![3](assets/3.png)
+```
+function Animal (name) {
+  this.name = name
+}
+Animal.color = 'black'
+Animal.prototype.say = function() {
+  console.log(this.name)
+}
+var cat = new Animal('cat')
+console.log(
+	cat.name, //cat
+	cat.height //undefined
+)
+cat.say() //cat
+
+console.log(
+	Animal.name, //Animal
+	Animal.color //black
+)
+Animal.say() //Animal.say is not a function
+```
 
 原来每一个函数都有很多属性，其中的name就是指的函数名本身
 还遇到一个caller属性指的什么呢？
@@ -133,17 +168,53 @@ obj.__proto__ = Constructor.prototype
 进一步拓展：
 了解了this是什么对象后，就知道了下面两个图中打印的this结果了
 
-![4](assets/4.png)
+```
+function Person() {
+  this.age = 0
+  function growUp() {
+    console.log('====', this) //window全局对象
+  }
+  growUp()
+}
 
-![5](assets/5.png)
+var p = new Person()
+```
 
+```
+function Person() {
+  this.age = 0
+  function growUp() {
+    console.log('=====', this) //p实例对象
+  }
+  growUp.call(this)
+}
+var p = new Person()
+```
 
 再进一步拓展，加上箭头函数：
 
-![6](assets/6.png)
+```
+function Person() {
+  this.age = 0
+  var growUp = () => {
+    console.log('====', this) //p实例对象，因为箭头函数没有自己的this，只会继承所在作用域链上层的this
+  }
+  growUp()
+}
+var p = new Person()
+```
 
-![7](assets/7.png)
+```
+function Person() {
+  this.age = 0
+  var growUp = () => {
+    console.log('====', this) //全局对象window
+  }
+  growUp()
+}
+Person()
+```
 
 
-可以看到万变不离其宗
+可以看到只要了解了JS中的一些基本概念和原理，万变不离其宗。
 
