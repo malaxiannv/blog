@@ -564,5 +564,52 @@ history.listen函数中传入了一个回调函数，回调函数中的this.apps
 
 继续回退到install函数中，下面一句代码是`Vue.util.defineReactive(this, '_route', this._router.history.current)`，这句代码的作用是给vue实例添加一个响应式属性_route。
 
-接下来是`registerInstance(this, this)`，
+接下来是`registerInstance(this, this)`，其中的this是指vue组件实例，看下这个函数是如何定义的
 
+```
+  const registerInstance = (vm, callVal) => {
+    let i = vm.$options._parentVnode//缓存vm中的_parentVnode属性值
+    if (isDef(i) && isDef(i = i.data) && isDef(i = i.registerRouteInstance)) {
+      i(vm, callVal) //执行registerRouteInstance函数
+    }
+  }
+```
+
+registerRouteInstance是在路由组件view中定义的，看下代码：
+
+```
+data.registerRouteInstance = (vm, val) => {
+      const current = matched.instances[name]
+      if (
+        (val && current !== vm) ||
+        (!val && current === vm)
+      ) {
+        matched.instances[name] = val
+      }
+    }
+```
+
+目前还不知道注册这个实例有什么作用，我们先跳过这段，install函数中的Vue.mixin就分析完毕了，接下来执行的是：
+
+```
+Object.defineProperty(Vue.prototype, '$router', {
+    get () { return this._routerRoot._router }
+  })
+
+  Object.defineProperty(Vue.prototype, '$route', {
+    get () { return this._routerRoot._route }
+  })
+
+  Vue.component('RouterView', View)
+  Vue.component('RouterLink', Link)
+```
+
+给vue的原型对象上定义两个属性`$router`、`$route`，还注册了两个全局组件RouterView和RouterLink。
+
+我们来总结下整体流程:
+
+1. 执行Vue.use(VueRouter)，会扩展vue初始化过程中的两个周期函数beforeCreate和destroyed
+2. 在beforeCreate中初始化路由，注册各个路由钩子函数
+3. 注册两个全局组件view和link
+
+相当于万事俱备，只等路由的触发了。
